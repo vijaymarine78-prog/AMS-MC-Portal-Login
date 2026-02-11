@@ -640,7 +640,14 @@ const generatePDFReport = (job) => {
 
                         <ConfirmationModal isOpen={showConfirmation} onConfirm={confirmVote} onCancel={() => { setShowConfirmation(false); setPendingVote(null); }} voteType={pendingVote?.vote} />
                         <DeveloperNoteModal isOpen={showDeveloperNote} onClose={() => setShowDeveloperNote(false)} />
-                        <ExitConfirmationModal isOpen={showExitConfirm} onConfirm={() => window.close()} onCancel={() => setShowExitConfirm(false)} />
+                        <ExitConfirmationModal isOpen={showExitConfirm} onConfirm={() => {
+    // Clear current member (logout)
+    setCurrentMember(null);
+    setCurrentView('home');
+    setShowExitConfirm(false);
+    // Optional: Show a message
+    alert('Logged out successfully');
+}} onCancel={() => setShowExitConfirm(false)} />
 
                         {/* Job Details Modal */}
                         {selectedJob && (
@@ -702,6 +709,7 @@ const generatePDFReport = (job) => {
     </script>
 </body>
 </html>
+
 
 
 
