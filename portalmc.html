@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif; }
         .vendor-table { overflow-x: auto; }
@@ -359,7 +360,124 @@ if (!loggedInUserId) {
                     loadFromCloud();
                 }
             };
-
+const generatePDFReport = (job) => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    // Title
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('RNA Courtyard CHSL', 105, 20, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text('Approval Request Report', 105, 28, { align: 'center' });
+    
+    // Line separator
+    doc.setLineWidth(0.5);
+    doc.line(20, 32, 190, 32);
+    
+    let yPos = 40;
+    
+    // Job Details
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Request Details:', 20, yPos);
+    yPos += 8;
+    
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    doc.text(`Agenda ID: ${job.agendaId}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Title: ${job.title}`, 20, yPos);
+    yPos += 6;
+    
+    // Handle long description
+    const descLines = doc.splitTextToSize(`Description: ${job.description}`, 170);
+    doc.text(descLines, 20, yPos);
+    yPos += descLines.length * 6;
+    
+    doc.text(`Approval Type: ${job.approvalType}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Approval During: ${job.approvalDuring}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Created by: ${job.creatorName} - ${job.creatorDesignation}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Date: ${new Date(job.createdAt).toLocaleString()}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Requested by: ${job.requestedBy}`, 20, yPos);
+    yPos += 6;
+    
+    if (job.additionalRemarks) {
+        const remarksLines = doc.splitTextToSize(`Remarks: ${job.additionalRemarks}`, 170);
+        doc.text(remarksLines, 20, yPos);
+        yPos += remarksLines.length * 6;
+    }
+    
+    yPos += 5;
+    
+    // Vendor Information
+    if (job.vendors?.length > 0 && job.vendors.some(v => v.name)) {
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(12);
+        doc.text('Vendor Quotations:', 20, yPos);
+        yPos += 8;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        
+        job.vendors.filter(v => v.name).forEach((vendor, index) => {
+            const vendorIndex = job.vendors.indexOf(vendor);
+            const isSelected = vendorIndex === job.selectedVendorIndex;
+            
+            if (isSelected) doc.setFont(undefined, 'bold');
+            doc.text(`${index + 1}. ${vendor.name} - ₹${vendor.quotation}${isSelected ? ' (SELECTED)' : ''}`, 25, yPos);
+            if (isSelected) doc.setFont(undefined, 'normal');
+            yPos += 6;
+        });
+        
+        yPos += 5;
+    }
+    
+    // Voting Results
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text('Committee Votes (15 Members):', 20, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    
+    const approved = job.approvals.filter(a => a.status === 'approved').length;
+    const rejected = job.approvals.filter(a => a.status === 'rejected').length;
+    const pending = job.approvals.filter(a => a.status === 'pending').length;
+    
+    doc.text(`Approved: ${approved} | Rejected: ${rejected} | Pending: ${pending}`, 20, yPos);
+    yPos += 8;
+    
+    // Individual votes
+    job.approvals.forEach((approval) => {
+        if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+        }
+        
+        const statusText = approval.status === 'approved' ? '✓ APPROVED' : 
+                          approval.status === 'rejected' ? '✗ REJECTED' : 
+                          '○ PENDING';
+        
+        doc.text(`${approval.memberName} (${approval.designation}): ${statusText}`, 25, yPos);
+        yPos += 6;
+    });
+    
+    // Footer
+    yPos += 10;
+    doc.setFontSize(8);
+    doc.setTextColor(128, 128, 128);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, yPos);
+    
+    // Save the PDF
+    const fileName = `RNA_Approval_${job.agendaId}_${new Date().getTime()}.pdf`;
+    doc.save(fileName);
+};
             const getJobStats = (job) => ({ approved: job.approvals.filter(a => a.status === 'approved').length, rejected: job.approvals.filter(a => a.status === 'rejected').length, pending: job.approvals.filter(a => a.status === 'pending').length });
             const getStatusColor = (s) => ({ approved: 'bg-green-100 text-green-800 border-green-300', rejected: 'bg-red-100 text-red-800 border-red-300', partial: 'bg-yellow-100 text-yellow-800 border-yellow-300' }[s] || 'bg-blue-100 text-blue-800 border-blue-300');
             const getApprovalTypeColor = (t) => ({ 'General Category': 'bg-blue-100 text-blue-800', 'Quotation Base Category': 'bg-purple-100 text-purple-800', 'Emergency Bases Category': 'bg-red-100 text-red-800', 'Routine Maintenance': 'bg-green-100 text-green-800' }[t] || 'bg-gray-100 text-gray-800');
@@ -546,7 +664,16 @@ if (!loggedInUserId) {
                                             </div>
                                             <button onClick={() => setSelectedJob(null)} className="text-gray-500 hover:text-gray-700 text-2xl font-bold ml-2">×</button>
                                         </div>
-
+{/* Download Report Button */}
+<div className="mb-4">
+    <button 
+        onClick={() => generatePDFReport(selectedJob)} 
+        className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2"
+    >
+        <Download className="w-5 h-5" />
+        Download Report
+    </button>
+</div>
                                         {selectedJob.capturedPhoto && (<div className="mb-4"><h3 className="font-bold mb-2">Captured Photo:</h3><img src={selectedJob.capturedPhoto} alt="Captured" className="max-w-sm rounded-lg border-2" /></div>)}
 
                                         {selectedJob.vendors?.length > 0 && selectedJob.vendors.some(v => v.name) && (
@@ -575,6 +702,7 @@ if (!loggedInUserId) {
     </script>
 </body>
 </html>
+
 
 
 
